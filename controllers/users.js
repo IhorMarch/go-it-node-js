@@ -1,10 +1,14 @@
 const { User } = require('../models/user');
 const bcrypt = require('bcrypt')
+const gravatar = require("gravatar");
 const { ctrlWrapper, HttpError } = require('../helpers');
 const jwt = require('jsonwebtoken');
 require("dotenv").config();
+const path = require("path");
+const fs = require('fs/promises');
 const { SECRET_KEY } = process.env
-
+const avatarsDir = path.join(__dirname, "../", "public", "avatars")
+const Jimp = require('jimp');
 
 const register = async(req, res)=> {
     const {email,password} = req.body;
@@ -14,7 +18,8 @@ const register = async(req, res)=> {
         throw HttpError(409, "Email already in use");
     }
     const hashPassword = await bcrypt.hash(password, 10);
-    const newUser = await User.create({...req.body, password:hashPassword});
+    const avatarURL = gravatar.url(email);
+    const newUser = await User.create({...req.body, password:hashPassword,avatarURL});
 
     res.status(201).json({
         email: newUser.email,
@@ -73,11 +78,34 @@ const updateSubscribe = async (req, res) => {
       res.json(updateUser.subscription)
 }
 
+const updateAvatar = async(req, res)=> {
+    const {_id} = req.user;
+    const { path: tempUpload, originalname } = req.file;
+    const filename = `${_id}_${originalname}`;
+    const resultUpload = path.join(avatarsDir, filename);
+
+
+    await fs.rename(tempUpload, resultUpload );
+    const avatarURL = path.join("avatars", filename);
+    await User.findByIdAndUpdate(_id, { avatarURL });
+    
+    await Jimp.read(resultUpload).then(image =>
+    {
+        return image.resize(250, 250).writeAsync(resultUpload)
+    })
+    .catch(err => console.log(err));
+    res.json({
+        avatarURL,
+    })
+}
+
 
 module.exports = {
     register: ctrlWrapper(register),
     login: ctrlWrapper(login),
     getCurrent: ctrlWrapper(getCurrent),
     logout: ctrlWrapper(logout),
-    updateSubscribe:ctrlWrapper(updateSubscribe),
+    updateSubscribe: ctrlWrapper(updateSubscribe),
+    updateAvatar:ctrlWrapper(updateAvatar),
+    
 }
