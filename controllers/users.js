@@ -1,14 +1,15 @@
 const { User } = require('../models/user');
 const bcrypt = require('bcrypt')
 const gravatar = require("gravatar");
-const { ctrlWrapper, HttpError } = require('../helpers');
+const { ctrlWrapper, HttpError,sendMail } = require('../helpers');
 const jwt = require('jsonwebtoken');
 require("dotenv").config();
 const path = require("path");
 const fs = require('fs/promises');
-const { SECRET_KEY } = process.env
+const { SECRET_KEY, BASE_URL } = process.env
 const avatarsDir = path.join(__dirname, "../", "public", "avatars")
 const Jimp = require('jimp');
+const { nanoid } = require('nanoid');
 
 const register = async(req, res)=> {
     const {email,password} = req.body;
@@ -19,7 +20,16 @@ const register = async(req, res)=> {
     }
     const hashPassword = await bcrypt.hash(password, 10);
     const avatarURL = gravatar.url(email);
-    const newUser = await User.create({...req.body, password:hashPassword,avatarURL});
+    const verificationToken = nanoid();
+    const newUser = await User.create({...req.body, password:hashPassword,avatarURL,verificationToken});
+
+
+    const verifyEmail = {
+        to: email,
+        subject: "Verify your email",
+        html: `<a target="_blank" href="${BASE_URL}/api/user/verify/${verificationToken}">Click verify email</a>`
+    }
+    await sendMail(verifyEmail);
 
     res.status(201).json({
         email: newUser.email,
